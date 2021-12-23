@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package org.springframework.util;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Locale;
 import java.util.Properties;
 
@@ -66,6 +67,7 @@ class StringUtilsTests {
 	}
 
 	@Test
+	@Deprecated
 	void trimWhitespace() {
 		assertThat(StringUtils.trimWhitespace(null)).isEqualTo(null);
 		assertThat(StringUtils.trimWhitespace("")).isEqualTo("");
@@ -96,6 +98,7 @@ class StringUtilsTests {
 	}
 
 	@Test
+	@Deprecated
 	void trimLeadingWhitespace() {
 		assertThat(StringUtils.trimLeadingWhitespace(null)).isEqualTo(null);
 		assertThat(StringUtils.trimLeadingWhitespace("")).isEqualTo("");
@@ -111,6 +114,7 @@ class StringUtilsTests {
 	}
 
 	@Test
+	@Deprecated
 	void trimTrailingWhitespace() {
 		assertThat(StringUtils.trimTrailingWhitespace(null)).isEqualTo(null);
 		assertThat(StringUtils.trimTrailingWhitespace("")).isEqualTo("");
@@ -402,6 +406,8 @@ class StringUtilsTests {
 		assertThat(StringUtils.cleanPath("file:.././")).isEqualTo("file:../");
 		assertThat(StringUtils.cleanPath("file:/mypath/spring.factories")).isEqualTo("file:/mypath/spring.factories");
 		assertThat(StringUtils.cleanPath("file:///c:/some/../path/the%20file.txt")).isEqualTo("file:///c:/path/the%20file.txt");
+		assertThat(StringUtils.cleanPath("jar:file:///c:\\some\\..\\path\\.\\the%20file.txt")).isEqualTo("jar:file:///c:/path/the%20file.txt");
+		assertThat(StringUtils.cleanPath("jar:file:///c:/some/../path/./the%20file.txt")).isEqualTo("jar:file:///c:/path/the%20file.txt");
 	}
 
 	@Test
@@ -435,21 +441,6 @@ class StringUtilsTests {
 		assertThat(StringUtils.concatenateStringArrays(input1, null)).isEqualTo(input1);
 		assertThat(StringUtils.concatenateStringArrays(null, input2)).isEqualTo(input2);
 		assertThat(StringUtils.concatenateStringArrays(null, null)).isNull();
-	}
-
-	@Test
-	@Deprecated
-	void mergeStringArrays() {
-		String[] input1 = new String[] {"myString2"};
-		String[] input2 = new String[] {"myString1", "myString2"};
-		String[] result = StringUtils.mergeStringArrays(input1, input2);
-		assertThat(result.length).isEqualTo(2);
-		assertThat(result[0]).isEqualTo("myString2");
-		assertThat(result[1]).isEqualTo("myString1");
-
-		assertThat(StringUtils.mergeStringArrays(input1, null)).isEqualTo(input1);
-		assertThat(StringUtils.mergeStringArrays(null, input2)).isEqualTo(input2);
-		assertThat(StringUtils.mergeStringArrays(null, null)).isNull();
 	}
 
 	@Test
@@ -612,7 +603,7 @@ class StringUtilsTests {
 		StringBuilder sb = new StringBuilder();
 		for (int i = 0; i < components.length; i++) {
 			if (i != 0) {
-				sb.append(",");
+				sb.append(',');
 			}
 			sb.append(components[i]);
 		}
@@ -773,6 +764,11 @@ class StringUtilsTests {
 		assertThat(StringUtils.split(null, ",")).isNull();
 		assertThat(StringUtils.split("Hello, world", null)).isNull();
 		assertThat(StringUtils.split(null, null)).isNull();
+	}
+
+	@Test
+	void collectionToDelimitedStringWithNullValuesShouldNotFail() {
+		assertThat(StringUtils.collectionToCommaDelimitedString(Collections.singletonList(null))).isEqualTo("null");
 	}
 
 }
