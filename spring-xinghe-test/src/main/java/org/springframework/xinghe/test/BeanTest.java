@@ -1,9 +1,7 @@
 package org.springframework.xinghe.test;
 
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
-import org.springframework.xinghe.test.bean.BeanConfig;
 import org.springframework.xinghe.test.bean.Person;
 
 /**
