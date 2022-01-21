@@ -5,5 +5,25 @@
 	<bean id="person" class="org.springframework.xinghe.test.bean.Person">
 		<property name="id" value="1"/>
 		<property name="name" value="星河"/>
+		<property name="pets">
+			<list>
+				<value>1</value>
+				<value>2</value>
+				<value>3</value>
+			</list>
+		</property>
+		<property name="gradeMap">
+			<map>
+				<entry key="english" value="90"/>
+				<entry key="chinese" value="95"/>
+			</map>
+		</property>
+		<property name="properties">
+			<props>
+				<prop key="sex">男</prop>
+				<prop key="hometown">河南</prop>
+			</props>
+		</property>
 	</bean>
+
 </beans>
