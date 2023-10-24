@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,6 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAccessor;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -53,22 +51,17 @@ import org.springframework.util.StringUtils;
 public class Jsr310DateTimeFormatAnnotationFormatterFactory extends EmbeddedValueResolutionSupport
 		implements AnnotationFormatterFactory<DateTimeFormat> {
 
-	private static final Set<Class<?>> FIELD_TYPES;
-
-	static {
-		// Create the set of field types that may be annotated with @DateTimeFormat.
-		Set<Class<?>> fieldTypes = new HashSet<>(8);
-		fieldTypes.add(Instant.class);
-		fieldTypes.add(LocalDate.class);
-		fieldTypes.add(LocalTime.class);
-		fieldTypes.add(LocalDateTime.class);
-		fieldTypes.add(ZonedDateTime.class);
-		fieldTypes.add(OffsetDateTime.class);
-		fieldTypes.add(OffsetTime.class);
-		fieldTypes.add(YearMonth.class);
-		fieldTypes.add(MonthDay.class);
-		FIELD_TYPES = Collections.unmodifiableSet(fieldTypes);
-	}
+	// Create the set of field types that may be annotated with @DateTimeFormat.
+	private static final Set<Class<?>> FIELD_TYPES = Set.of(
+				Instant.class,
+				LocalDate.class,
+				LocalTime.class,
+				LocalDateTime.class,
+				ZonedDateTime.class,
+				OffsetDateTime.class,
+				OffsetTime.class,
+				YearMonth.class,
+				MonthDay.class);
 
 	@Override
 	public final Set<Class<?>> getFieldTypes() {
@@ -102,6 +95,8 @@ public class Jsr310DateTimeFormatAnnotationFormatterFactory extends EmbeddedValu
 	@Override
 	@SuppressWarnings("unchecked")
 	public Parser<?> getParser(DateTimeFormat annotation, Class<?> fieldType) {
+		DateTimeFormatter formatter = getFormatter(annotation, fieldType);
+
 		List<String> resolvedFallbackPatterns = new ArrayList<>();
 		for (String fallbackPattern : annotation.fallbackPatterns()) {
 			String resolvedFallbackPattern = resolveEmbeddedValue(fallbackPattern);
@@ -110,7 +105,6 @@ public class Jsr310DateTimeFormatAnnotationFormatterFactory extends EmbeddedValu
 			}
 		}
 
-		DateTimeFormatter formatter = getFormatter(annotation, fieldType);
 		return new TemporalAccessorParser((Class<? extends TemporalAccessor>) fieldType,
 				formatter, resolvedFallbackPatterns.toArray(new String[0]), annotation);
 	}
