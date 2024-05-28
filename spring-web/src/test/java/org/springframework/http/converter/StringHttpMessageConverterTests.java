@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2023 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -170,5 +170,20 @@ class StringHttpMessageConverterTests {
 		assertThat(headers.getContentLength()).isEqualTo(body.getBytes().length);
 		assertThat(headers.getAcceptCharset()).isEmpty();
 	}
+
+	@Test
+	void repeatableWrites() throws IOException {
+		MockHttpOutputMessage outputMessage1 = new MockHttpOutputMessage();
+		String body = "Hello World";
+		assertThat(converter.supportsRepeatableWrites(body)).isTrue();
+
+		converter.write(body, TEXT_PLAIN_UTF_8, outputMessage1);
+		assertThat(outputMessage1.getBodyAsString()).isEqualTo(body);
+
+		MockHttpOutputMessage outputMessage2 = new MockHttpOutputMessage();
+		converter.write(body, TEXT_PLAIN_UTF_8, outputMessage2);
+		assertThat(outputMessage2.getBodyAsString()).isEqualTo(body);
+	}
+
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2023 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 package org.springframework.web.client;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.net.URI;
@@ -24,7 +26,6 @@ import java.nio.charset.Charset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -69,6 +70,7 @@ import org.springframework.web.util.UriBuilderFactory;
  * as created by the static factory methods.
  *
  * @author Arjen Poutsma
+ * @author Sebastien Deleuze
  * @since 6.1
  * @see RestClient#create()
  * @see RestClient#create(String)
@@ -79,8 +81,6 @@ final class DefaultRestClient implements RestClient {
 	private static final Log logger = LogFactory.getLog(DefaultRestClient.class);
 
 	private static final ClientRequestObservationConvention DEFAULT_OBSERVATION_CONVENTION = new DefaultClientRequestObservationConvention();
-
-	private static final String URI_TEMPLATE_ATTRIBUTE = RestClient.class.getName() + ".uriTemplate";
 
 
 	private final ClientHttpRequestFactory clientRequestFactory;
@@ -99,6 +99,9 @@ final class DefaultRestClient implements RestClient {
 	@Nullable
 	private final HttpHeaders defaultHeaders;
 
+	@Nullable
+	private final Consumer<RequestHeadersSpec<?>> defaultRequest;
+
 	private final List<StatusHandler> defaultStatusHandlers;
 
 	private final DefaultRestClientBuilder builder;
@@ -116,6 +119,7 @@ final class DefaultRestClient implements RestClient {
 			@Nullable List<ClientHttpRequestInitializer> initializers,
 			UriBuilderFactory uriBuilderFactory,
 			@Nullable HttpHeaders defaultHeaders,
+			@Nullable Consumer<RequestHeadersSpec<?>> defaultRequest,
 			@Nullable List<StatusHandler> statusHandlers,
 			List<HttpMessageConverter<?>> messageConverters,
 			ObservationRegistry observationRegistry,
@@ -127,6 +131,7 @@ final class DefaultRestClient implements RestClient {
 		this.interceptors = interceptors;
 		this.uriBuilderFactory = uriBuilderFactory;
 		this.defaultHeaders = defaultHeaders;
+		this.defaultRequest = defaultRequest;
 		this.defaultStatusHandlers = (statusHandlers != null ? new ArrayList<>(statusHandlers) : new ArrayList<>());
 		this.messageConverters = messageConverters;
 		this.observationRegistry = observationRegistry;
@@ -176,13 +181,106 @@ final class DefaultRestClient implements RestClient {
 	}
 
 	private RequestBodyUriSpec methodInternal(HttpMethod httpMethod) {
-		return new DefaultRequestBodyUriSpec(httpMethod);
+		DefaultRequestBodyUriSpec spec = new DefaultRequestBodyUriSpec(httpMethod);
+		if (this.defaultRequest != null) {
+			this.defaultRequest.accept(spec);
+		}
+		return spec;
 	}
 
 	@Override
 	public Builder mutate() {
 		return new DefaultRestClientBuilder(this.builder);
 	}
+
+	@Nullable
+	@SuppressWarnings({"rawtypes", "unchecked"})
+	private <T> T readWithMessageConverters(ClientHttpResponse clientResponse, Runnable callback, Type bodyType,
+			Class<T> bodyClass, @Nullable Observation observation) {
+
+		MediaType contentType = getContentType(clientResponse);
+
+		try (clientResponse) {
+			callback.run();
+
+			IntrospectingClientHttpResponse responseWrapper = new IntrospectingClientHttpResponse(clientResponse);
+			if (!responseWrapper.hasMessageBody() || responseWrapper.hasEmptyMessageBody()) {
+				return null;
+			}
+
+			for (HttpMessageConverter<?> messageConverter : this.messageConverters) {
+				if (messageConverter instanceof GenericHttpMessageConverter genericHttpMessageConverter) {
+					if (genericHttpMessageConverter.canRead(bodyType, null, contentType)) {
+						if (logger.isDebugEnabled()) {
+							logger.debug("Reading to [" + ResolvableType.forType(bodyType) + "]");
+						}
+						return (T) genericHttpMessageConverter.read(bodyType, null, responseWrapper);
+					}
+				}
+				if (messageConverter.canRead(bodyClass, contentType)) {
+					if (logger.isDebugEnabled()) {
+						logger.debug("Reading to [" + bodyClass.getName() + "] as \"" + contentType + "\"");
+					}
+					return (T) messageConverter.read((Class)bodyClass, responseWrapper);
+				}
+			}
+			UnknownContentTypeException unknownContentTypeException = new UnknownContentTypeException(bodyType, contentType,
+					responseWrapper.getStatusCode(), responseWrapper.getStatusText(),
+					responseWrapper.getHeaders(), RestClientUtils.getBody(responseWrapper));
+			if (observation != null) {
+				observation.error(unknownContentTypeException);
+			}
+			throw unknownContentTypeException;
+		}
+		catch (UncheckedIOException | IOException | HttpMessageNotReadableException exc) {
+			Throwable cause;
+			if (exc instanceof UncheckedIOException uncheckedIOException) {
+				cause = uncheckedIOException.getCause();
+			}
+			else {
+				cause = exc;
+			}
+			RestClientException restClientException = new RestClientException("Error while extracting response for type [" +
+					ResolvableType.forType(bodyType) + "] and content type [" + contentType + "]", cause);
+			if (observation != null) {
+				observation.error(restClientException);
+			}
+			throw restClientException;
+		}
+		catch (RestClientException restClientException) {
+			if (observation != null) {
+				observation.error(restClientException);
+			}
+			throw restClientException;
+		}
+		finally {
+			if (observation != null) {
+				observation.stop();
+			}
+		}
+	}
+
+	private static MediaType getContentType(ClientHttpResponse clientResponse) {
+		MediaType contentType = clientResponse.getHeaders().getContentType();
+		if (contentType == null) {
+			contentType = MediaType.APPLICATION_OCTET_STREAM;
+		}
+		return contentType;
+	}
+
+	@SuppressWarnings("unchecked")
+	private static <T> Class<T> bodyClass(Type type) {
+		if (type instanceof Class<?> clazz) {
+			return (Class<T>) clazz;
+		}
+		if (type instanceof ParameterizedType parameterizedType &&
+				parameterizedType.getRawType() instanceof Class<?> rawType) {
+			return (Class<T>) rawType;
+		}
+		return (Class<T>) Object.class;
+	}
+
+
 
 
 	private class DefaultRequestBodyUriSpec implements RequestBodyUriSpec {
@@ -198,7 +296,8 @@ final class DefaultRestClient implements RestClient {
 		@Nullable
 		private InternalBody body;
 
-		private final Map<String, Object> attributes = new LinkedHashMap<>(4);
+		@Nullable
+		private String uriTemplate;
 
 		@Nullable
 		private Consumer<ClientHttpRequest> httpRequestConsumer;
@@ -209,19 +308,19 @@ final class DefaultRestClient implements RestClient {
 
 		@Override
 		public RequestBodySpec uri(String uriTemplate, Object... uriVariables) {
-			attribute(URI_TEMPLATE_ATTRIBUTE, uriTemplate);
+			this.uriTemplate = uriTemplate;
 			return uri(DefaultRestClient.this.uriBuilderFactory.expand(uriTemplate, uriVariables));
 		}
 
 		@Override
 		public RequestBodySpec uri(String uriTemplate, Map<String, ?> uriVariables) {
-			attribute(URI_TEMPLATE_ATTRIBUTE, uriTemplate);
+			this.uriTemplate = uriTemplate;
 			return uri(DefaultRestClient.this.uriBuilderFactory.expand(uriTemplate, uriVariables));
 		}
 
 		@Override
 		public RequestBodySpec uri(String uriTemplate, Function<UriBuilder, URI> uriFunction) {
-			attribute(URI_TEMPLATE_ATTRIBUTE, uriTemplate);
+			this.uriTemplate = uriTemplate;
 			return uri(uriFunction.apply(DefaultRestClient.this.uriBuilderFactory.uriString(uriTemplate)));
 		}
 
@@ -290,18 +389,6 @@ final class DefaultRestClient implements RestClient {
 		@Override
 		public DefaultRequestBodyUriSpec ifNoneMatch(String... ifNoneMatches) {
 			getHeaders().setIfNoneMatch(Arrays.asList(ifNoneMatches));
-			return this;
-		}
-
-		@Override
-		public RequestBodySpec attribute(String name, Object value) {
-			this.attributes.put(name, value);
-			return this;
-		}
-
-		@Override
-		public RequestBodySpec attributes(Consumer<Map<String, Object>> attributesConsumer) {
-			attributesConsumer.accept(this.attributes);
 			return this;
 		}
 
@@ -397,7 +484,7 @@ final class DefaultRestClient implements RestClient {
 				ClientHttpRequest clientRequest = createRequest(uri);
 				clientRequest.getHeaders().addAll(headers);
 				ClientRequestObservationContext observationContext = new ClientRequestObservationContext(clientRequest);
-				observationContext.setUriTemplate((String) this.attributes.get(URI_TEMPLATE_ATTRIBUTE));
+				observationContext.setUriTemplate(this.uriTemplate);
 				observation = ClientHttpObservationDocumentation.HTTP_CLIENT_EXCHANGES.observation(observationConvention,
 						DEFAULT_OBSERVATION_CONVENTION, () -> observationContext, observationRegistry).start();
 				if (this.body != null) {
@@ -408,27 +495,30 @@ final class DefaultRestClient implements RestClient {
 				}
 				clientResponse = clientRequest.execute();
 				observationContext.setResponse(clientResponse);
-				return exchangeFunction.exchange(clientRequest, clientResponse);
+				ConvertibleClientHttpResponse convertibleWrapper = new DefaultConvertibleClientHttpResponse(clientResponse, observation);
+				return exchangeFunction.exchange(clientRequest, convertibleWrapper);
 			}
 			catch (IOException ex) {
 				ResourceAccessException resourceAccessException = createResourceAccessException(uri, this.httpMethod, ex);
 				if (observation != null) {
 					observation.error(resourceAccessException);
+					observation.stop();
 				}
 				throw resourceAccessException;
 			}
 			catch (Throwable error) {
 				if (observation != null) {
 					observation.error(error);
+					observation.stop();
 				}
 				throw error;
 			}
 			finally {
 				if (close && clientResponse != null) {
 					clientResponse.close();
-				}
-				if (observation != null) {
-					observation.stop();
+					if (observation != null) {
+						observation.stop();
+					}
 				}
 			}
 		}
@@ -540,15 +630,17 @@ final class DefaultRestClient implements RestClient {
 		}
 
 		@Override
+		@Nullable
 		public <T> T body(Class<T> bodyType) {
-			return readWithMessageConverters(bodyType, bodyType);
+			return readBody(bodyType, bodyType);
 		}
 
 		@Override
+		@Nullable
 		public <T> T body(ParameterizedTypeReference<T> bodyType) {
 			Type type = bodyType.getType();
 			Class<T> bodyClass = bodyClass(type);
-			return readWithMessageConverters(type, bodyClass);
+			return readBody(type, bodyClass);
 		}
 
 		@Override
@@ -564,7 +656,7 @@ final class DefaultRestClient implements RestClient {
 		}
 
 		private <T> ResponseEntity<T> toEntityInternal(Type bodyType, Class<T> bodyClass) {
-			T body = readWithMessageConverters(bodyType, bodyClass);
+			T body = readBody(bodyType, bodyClass);
 			try {
 				return ResponseEntity.status(this.clientResponse.getStatusCode())
 						.headers(this.clientResponse.getHeaders())
@@ -578,77 +670,110 @@ final class DefaultRestClient implements RestClient {
 		@Override
 		public ResponseEntity<Void> toBodilessEntity() {
 			try (this.clientResponse) {
-				applyStatusHandlers(this.clientRequest, this.clientResponse);
+				applyStatusHandlers();
 				return ResponseEntity.status(this.clientResponse.getStatusCode())
 						.headers(this.clientResponse.getHeaders())
 						.build();
+			}
+			catch (UncheckedIOException ex) {
+				throw new ResourceAccessException("Could not retrieve response status code: " + ex.getMessage(), ex.getCause());
 			}
 			catch (IOException ex) {
 				throw new ResourceAccessException("Could not retrieve response status code: " + ex.getMessage(), ex);
 			}
 		}
 
-		@SuppressWarnings("unchecked")
-		private static <T> Class<T> bodyClass(Type type) {
-			if (type instanceof Class<?> clazz) {
-				return (Class<T>) clazz;
-			}
-			if (type instanceof ParameterizedType parameterizedType &&
-					parameterizedType.getRawType() instanceof Class<?> rawType) {
-				return (Class<T>) rawType;
-			}
-			return (Class<T>) Object.class;
+
+		@Nullable
+		private <T> T readBody(Type bodyType, Class<T> bodyClass) {
+			return DefaultRestClient.this.readWithMessageConverters(this.clientResponse, this::applyStatusHandlers,
+					bodyType, bodyClass, getCurrentObservation());
+
 		}
 
-		@SuppressWarnings({"rawtypes", "unchecked"})
-		private <T> T readWithMessageConverters(Type bodyType, Class<T> bodyClass) {
-			MediaType contentType = getContentType();
-
-			try (this.clientResponse) {
-				applyStatusHandlers(this.clientRequest, this.clientResponse);
-
-				for (HttpMessageConverter<?> messageConverter : DefaultRestClient.this.messageConverters) {
-					if (messageConverter instanceof GenericHttpMessageConverter genericHttpMessageConverter) {
-						if (genericHttpMessageConverter.canRead(bodyType, bodyClass, contentType)) {
-							if (logger.isDebugEnabled()) {
-								logger.debug("Reading to [" + ResolvableType.forType(bodyType) + "]");
-							}
-							return (T) genericHttpMessageConverter.read(bodyType, bodyClass, this.clientResponse);
-						}
-					}
-					if (messageConverter.canRead(bodyClass, contentType)) {
-						if (logger.isDebugEnabled()) {
-							logger.debug("Reading to [" + bodyClass.getName() + "] as \"" + contentType + "\"");
-						}
-						return (T) messageConverter.read((Class)bodyClass, this.clientResponse);
+		private void applyStatusHandlers() {
+			try {
+				ClientHttpResponse response = this.clientResponse;
+				if (response instanceof DefaultConvertibleClientHttpResponse convertibleResponse) {
+					response = convertibleResponse.delegate;
+				}
+				for (StatusHandler handler : this.statusHandlers) {
+					if (handler.test(response)) {
+						handler.handle(this.clientRequest, response);
+						return;
 					}
 				}
-				throw new UnknownContentTypeException(bodyType, contentType,
-						this.clientResponse.getStatusCode(), this.clientResponse.getStatusText(),
-						this.clientResponse.getHeaders(), RestClientUtils.getBody(this.clientResponse));
 			}
-			catch (IOException | HttpMessageNotReadableException ex) {
-				throw new RestClientException("Error while extracting response for type [" +
-						ResolvableType.forType(bodyType) + "] and content type [" + contentType + "]", ex);
+			catch (IOException ex) {
+				throw new UncheckedIOException(ex);
 			}
 		}
 
-		private MediaType getContentType() {
-			MediaType contentType = this.clientResponse.getHeaders().getContentType();
-			if (contentType == null) {
-				contentType = MediaType.APPLICATION_OCTET_STREAM;
+		@Nullable
+		private Observation getCurrentObservation() {
+			if (this.clientResponse instanceof DefaultConvertibleClientHttpResponse convertibleResponse) {
+				return convertibleResponse.observation;
 			}
-			return contentType;
+			return null;
 		}
 
-		private void applyStatusHandlers(HttpRequest request, ClientHttpResponse response) throws IOException {
-			for (StatusHandler handler : this.statusHandlers) {
-				if (handler.test(response)) {
-					handler.handle(request, response);
-					return;
-				}
-			}
-		}
 	}
+
+
+	private class DefaultConvertibleClientHttpResponse implements RequestHeadersSpec.ConvertibleClientHttpResponse {
+
+		private final ClientHttpResponse delegate;
+
+		private final Observation observation;
+
+
+		public DefaultConvertibleClientHttpResponse(ClientHttpResponse delegate, Observation observation) {
+			this.delegate = delegate;
+			this.observation = observation;
+		}
+
+
+		@Nullable
+		@Override
+		public <T> T bodyTo(Class<T> bodyType) {
+			return readWithMessageConverters(this.delegate, () -> {} , bodyType, bodyType, this.observation);
+		}
+
+		@Nullable
+		@Override
+		public <T> T bodyTo(ParameterizedTypeReference<T> bodyType) {
+			Type type = bodyType.getType();
+			Class<T> bodyClass = bodyClass(type);
+			return readWithMessageConverters(this.delegate, () -> {}, type, bodyClass, this.observation);
+		}
+
+		@Override
+		public InputStream getBody() throws IOException {
+			return this.delegate.getBody();
+		}
+
+		@Override
+		public HttpHeaders getHeaders() {
+			return this.delegate.getHeaders();
+		}
+
+		@Override
+		public HttpStatusCode getStatusCode() throws IOException {
+			return this.delegate.getStatusCode();
+		}
+
+		@Override
+		public String getStatusText() throws IOException {
+			return this.delegate.getStatusText();
+		}
+
+		@Override
+		public void close() {
+			this.delegate.close();
+			this.observation.stop();
+		}
+
+	}
+
 
 }

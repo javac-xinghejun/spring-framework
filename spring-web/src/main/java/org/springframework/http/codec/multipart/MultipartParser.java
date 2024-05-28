@@ -49,6 +49,7 @@ import org.springframework.lang.Nullable;
  * @author Arjen Poutsma
  * @since 5.3
  */
+@SuppressWarnings("NullAway")
 final class MultipartParser extends BaseSubscriber<DataBuffer> {
 
 	private static final byte CR = '\r';
@@ -540,7 +541,7 @@ final class MultipartParser extends BaseSubscriber<DataBuffer> {
 					while ((prev = this.queue.pollLast()) != null) {
 						int prevByteCount = prev.readableByteCount();
 						int prevLen = prevByteCount + len;
-						if (prevLen > 0) {
+						if (prevLen >= 0) {
 							// slice body part of previous buffer, and flush it
 							DataBuffer body = prev.split(prevLen + prev.readPosition());
 							DataBufferUtils.release(prev);

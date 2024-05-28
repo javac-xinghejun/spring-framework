@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2023 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,6 +45,8 @@ import org.springframework.beans.factory.support.RootBeanDefinition;
 import org.springframework.beans.testfixture.beans.AnnotatedBean;
 import org.springframework.beans.testfixture.beans.GenericBean;
 import org.springframework.beans.testfixture.beans.TestBean;
+import org.springframework.beans.testfixture.beans.factory.aot.CustomBean;
+import org.springframework.beans.testfixture.beans.factory.aot.CustomPropertyValue;
 import org.springframework.beans.testfixture.beans.factory.aot.InnerBeanConfiguration;
 import org.springframework.beans.testfixture.beans.factory.aot.MockBeanRegistrationsCode;
 import org.springframework.beans.testfixture.beans.factory.aot.SimpleBean;
@@ -159,7 +161,8 @@ class BeanDefinitionMethodGeneratorTests {
 
 	@Test
 	void generateWithBeanClassAndFactoryMethodNameSetsTargetTypeAndBeanClass() {
-		this.beanFactory.registerSingleton("factory", new SimpleBeanConfiguration());
+		this.beanFactory.registerBeanDefinition("factory",
+				new RootBeanDefinition(SimpleBeanConfiguration.class));
 		RootBeanDefinition beanDefinition = new RootBeanDefinition(SimpleBean.class);
 		beanDefinition.setFactoryBeanName("factory");
 		beanDefinition.setFactoryMethodName("simpleBean");
@@ -180,7 +183,8 @@ class BeanDefinitionMethodGeneratorTests {
 
 	@Test
 	void generateWithTargetTypeAndFactoryMethodNameSetsOnlyBeanClass() {
-		this.beanFactory.registerSingleton("factory", new SimpleBeanConfiguration());
+		this.beanFactory.registerBeanDefinition("factory",
+				new RootBeanDefinition(SimpleBeanConfiguration.class));
 		RootBeanDefinition beanDefinition = new RootBeanDefinition();
 		beanDefinition.setTargetType(SimpleBean.class);
 		beanDefinition.setFactoryBeanName("factory");
@@ -606,6 +610,23 @@ class BeanDefinitionMethodGeneratorTests {
 	}
 
 	@Test
+	void generateBeanDefinitionMethodWhenCustomPropertyValueUsesCustomDelegate() {
+		RootBeanDefinition beanDefinition = new RootBeanDefinition(CustomBean.class);
+		beanDefinition.getPropertyValues().addPropertyValue(
+				"customPropertyValue", new CustomPropertyValue("test"));
+		RegisteredBean bean = registerBean(beanDefinition);
+		BeanDefinitionMethodGenerator generator = new BeanDefinitionMethodGenerator(
+				this.methodGeneratorFactory, bean, "test",
+				Collections.emptyList());
+		MethodReference method = generator.generateBeanDefinitionMethod(
+				this.generationContext, this.beanRegistrationsCode);
+		compile(method, (actual, compiled) ->
+				assertThat(actual.getPropertyValues().get("customPropertyValue"))
+						.isInstanceOfSatisfying(CustomPropertyValue.class, customPropertyValue
+								-> assertThat(customPropertyValue.value()).isEqualTo("test")));
+	}
+
+	@Test
 	void generateBeanDefinitionMethodWhenHasAotContributionsAppliesContributions() {
 		RegisteredBean registeredBean = registerBean(
 				new RootBeanDefinition(TestBean.class));
@@ -671,8 +692,8 @@ class BeanDefinitionMethodGeneratorTests {
 				this.methodGeneratorFactory, registeredBean, null,
 				List.of());
 		assertThatIllegalStateException().isThrownBy(() -> generator.generateBeanDefinitionMethod(
-				this.generationContext, this.beanRegistrationsCode)).withMessageStartingWith(
-				"Default code generation is not supported for bean definitions declaring an instance supplier callback");
+				this.generationContext, this.beanRegistrationsCode)).withMessage(
+				"Error processing bean with name 'testBean': instance supplier is not supported");
 	}
 
 	@Test
@@ -708,8 +729,8 @@ class BeanDefinitionMethodGeneratorTests {
 				this.methodGeneratorFactory, registeredBean, null,
 				List.of(aotContribution));
 		assertThatIllegalStateException().isThrownBy(() -> generator.generateBeanDefinitionMethod(
-				this.generationContext, this.beanRegistrationsCode)).withMessageStartingWith(
-						"Default code generation is not supported for bean definitions declaring an instance supplier callback");
+				this.generationContext, this.beanRegistrationsCode)).withMessage(
+						"Error processing bean with name 'testBean': instance supplier is not supported");
 	}
 
 	@Test
@@ -752,6 +773,19 @@ class BeanDefinitionMethodGeneratorTests {
 		@Test
 		void generateBeanDefinitionMethodWithDeprecatedTargetClass() {
 			RootBeanDefinition beanDefinition = new RootBeanDefinition(DeprecatedBean.class);
+			RegisteredBean registeredBean = registerBean(beanDefinition);
+			BeanDefinitionMethodGenerator generator = new BeanDefinitionMethodGenerator(
+					methodGeneratorFactory, registeredBean, null,
+					Collections.emptyList());
+			MethodReference method = generator.generateBeanDefinitionMethod(
+					generationContext, beanRegistrationsCode);
+			compileAndCheckWarnings(method);
+		}
+
+		@Test
+		void generateBeanDefinitionMethodWithDeprecatedGenericElementInTargetClass() {
+			RootBeanDefinition beanDefinition = new RootBeanDefinition();
+			beanDefinition.setTargetType(ResolvableType.forClassWithGenerics(GenericBean.class, DeprecatedBean.class));
 			RegisteredBean registeredBean = registerBean(beanDefinition);
 			BeanDefinitionMethodGenerator generator = new BeanDefinitionMethodGenerator(
 					methodGeneratorFactory, registeredBean, null,

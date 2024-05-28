@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2023 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +54,11 @@ import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
 
 /**
- * Default implementation of the {@link LifecycleProcessor} strategy.
+ * Spring's default implementation of the {@link LifecycleProcessor} strategy.
+ *
+ * <p>Provides interaction with {@link Lifecycle} and {@link SmartLifecycle} beans in
+ * groups for specific phases, on startup/shutdown as well as for explicit start/stop
+ * interactions on a {@link org.springframework.context.ConfigurableApplicationContext}.
  *
  * <p>Provides interaction with {@link Lifecycle} and {@link SmartLifecycle} beans in
  * groups for specific phases, on startup/shutdown as well as for explicit start/stop
@@ -73,26 +77,36 @@ public class DefaultLifecycleProcessor implements LifecycleProcessor, BeanFactor
 	/**
 	 * Property name for a common context checkpoint: {@value}.
 	 * @since 6.1
-	 * @see #CHECKPOINT_ON_REFRESH_VALUE
+	 * @see #ON_REFRESH_VALUE
 	 * @see org.crac.Core#checkpointRestore()
 	 */
 	public static final String CHECKPOINT_PROPERTY_NAME = "spring.context.checkpoint";
 
 	/**
-	 * Recognized value for the context checkpoint property: {@value}.
+	 * Property name for terminating the JVM when the context reaches a specific phase: {@value}.
+	 * @since 6.1
+	 * @see #ON_REFRESH_VALUE
+	 */
+	public static final String EXIT_PROPERTY_NAME = "spring.context.exit";
+
+	/**
+	 * Recognized value for the context checkpoint and exit properties: {@value}.
 	 * @since 6.1
 	 * @see #CHECKPOINT_PROPERTY_NAME
-	 * @see org.crac.Core#checkpointRestore()
+	 * @see #EXIT_PROPERTY_NAME
 	 */
-	public static final String CHECKPOINT_ON_REFRESH_VALUE = "onRefresh";
+	public static final String ON_REFRESH_VALUE = "onRefresh";
 
 
 	private static final boolean checkpointOnRefresh =
-			CHECKPOINT_ON_REFRESH_VALUE.equalsIgnoreCase(SpringProperties.getProperty(CHECKPOINT_PROPERTY_NAME));
+			ON_REFRESH_VALUE.equalsIgnoreCase(SpringProperties.getProperty(CHECKPOINT_PROPERTY_NAME));
+
+	private static final boolean exitOnRefresh =
+			ON_REFRESH_VALUE.equalsIgnoreCase(SpringProperties.getProperty(EXIT_PROPERTY_NAME));
 
 	private final Log logger = LogFactory.getLog(getClass());
 
-	private volatile long timeoutPerShutdownPhase = 30000;
+	private volatile long timeoutPerShutdownPhase = 10000;
 
 	private volatile boolean running;
 
@@ -121,7 +135,7 @@ public class DefaultLifecycleProcessor implements LifecycleProcessor, BeanFactor
 	/**
 	 * Specify the maximum time allotted in milliseconds for the shutdown of any
 	 * phase (group of {@link SmartLifecycle} beans with the same 'phase' value).
-	 * <p>The default value is 30000 milliseconds (30 seconds).
+	 * <p>The default value is 10000 milliseconds (10 seconds) as of 6.2.
 	 * @see SmartLifecycle#getPhase()
 	 */
 	public void setTimeoutPerShutdownPhase(long timeoutPerShutdownPhase) {
@@ -182,6 +196,9 @@ public class DefaultLifecycleProcessor implements LifecycleProcessor, BeanFactor
 		if (checkpointOnRefresh) {
 			new CracDelegate().checkpointRestore();
 		}
+		if (exitOnRefresh) {
+			Runtime.getRuntime().halt(0);
+		}
 
 		this.stoppedBeans = null;
 		try {
@@ -212,7 +229,7 @@ public class DefaultLifecycleProcessor implements LifecycleProcessor, BeanFactor
 
 	void stopForRestart() {
 		if (this.running) {
-			this.stoppedBeans = Collections.newSetFromMap(new ConcurrentHashMap<>());
+			this.stoppedBeans = ConcurrentHashMap.newKeySet();
 			stopBeans();
 			this.running = false;
 		}
@@ -477,9 +494,9 @@ public class DefaultLifecycleProcessor implements LifecycleProcessor, BeanFactor
 			try {
 				latch.await(this.timeout, TimeUnit.MILLISECONDS);
 				if (latch.getCount() > 0 && !countDownBeanNames.isEmpty() && logger.isInfoEnabled()) {
-					logger.info("Failed to shut down " + countDownBeanNames.size() + " bean" +
-							(countDownBeanNames.size() > 1 ? "s" : "") + " with phase value " +
-							this.phase + " within timeout of " + this.timeout + "ms: " + countDownBeanNames);
+					logger.info("Shutdown phase " + this.phase + " ends with " + countDownBeanNames.size() +
+							" bean" + (countDownBeanNames.size() > 1 ? "s" : "") +
+							" still running after timeout of " + this.timeout + "ms: " + countDownBeanNames);
 				}
 			}
 			catch (InterruptedException ex) {

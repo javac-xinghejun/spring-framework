@@ -16,6 +16,7 @@
 
 package org.springframework.http.client;
 
+import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
@@ -44,6 +45,9 @@ import org.springframework.util.StreamUtils;
  */
 class JettyClientHttpRequest extends AbstractStreamingClientHttpRequest {
 
+	private static final int CHUNK_SIZE = 1024;
+
+
 	private final Request request;
 
 	private final long readTimeout;
@@ -65,6 +69,7 @@ class JettyClientHttpRequest extends AbstractStreamingClientHttpRequest {
 	}
 
 	@Override
+	@SuppressWarnings("NullAway")
 	protected ClientHttpResponse executeInternal(HttpHeaders headers, @Nullable Body body) throws IOException {
 		if (!headers.isEmpty()) {
 			this.request.headers(httpFields -> {
@@ -85,7 +90,8 @@ class JettyClientHttpRequest extends AbstractStreamingClientHttpRequest {
 				OutputStreamRequestContent requestContent = new OutputStreamRequestContent(contentType);
 				this.request.body(requestContent)
 						.send(responseListener);
-				try (OutputStream outputStream = requestContent.getOutputStream()) {
+				try (OutputStream outputStream =
+							new BufferedOutputStream(requestContent.getOutputStream(), CHUNK_SIZE)) {
 					body.writeTo(StreamUtils.nonClosing(outputStream));
 				}
 			}

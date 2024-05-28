@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2023 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 package org.springframework.web.reactive.function.client;
 
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
@@ -54,7 +53,6 @@ import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
-import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.BodyExtractor;
 import org.springframework.web.reactive.function.BodyInserter;
 import org.springframework.web.reactive.function.BodyInserters;
@@ -79,7 +77,9 @@ final class DefaultWebClient implements WebClient {
 	private static final Mono<ClientResponse> NO_HTTP_CLIENT_RESPONSE_ERROR = Mono.error(
 			() -> new IllegalStateException("The underlying HTTP client completed without emitting a response."));
 
-	private static final DefaultClientRequestObservationConvention DEFAULT_OBSERVATION_CONVENTION = new DefaultClientRequestObservationConvention();
+	private static final DefaultClientRequestObservationConvention DEFAULT_OBSERVATION_CONVENTION =
+			new DefaultClientRequestObservationConvention();
+
 
 	private final ExchangeFunction exchangeFunction;
 
@@ -119,10 +119,10 @@ final class DefaultWebClient implements WebClient {
 		this.uriBuilderFactory = uriBuilderFactory;
 		this.defaultHeaders = defaultHeaders;
 		this.defaultCookies = defaultCookies;
-		this.observationRegistry = observationRegistry;
-		this.observationConvention = observationConvention;
 		this.defaultRequest = defaultRequest;
 		this.defaultStatusHandlers = initStatusHandlers(statusHandlerMap);
+		this.observationRegistry = observationRegistry;
+		this.observationConvention = observationConvention;
 		this.builder = builder;
 	}
 
@@ -177,7 +177,11 @@ final class DefaultWebClient implements WebClient {
 	}
 
 	private RequestBodyUriSpec methodInternal(HttpMethod httpMethod) {
-		return new DefaultRequestBodyUriSpec(httpMethod);
+		DefaultRequestBodyUriSpec spec = new DefaultRequestBodyUriSpec(httpMethod);
+		if (this.defaultRequest != null) {
+			this.defaultRequest.accept(spec);
+		}
+		return spec;
 	}
 
 	@Override
@@ -224,20 +228,23 @@ final class DefaultWebClient implements WebClient {
 
 		@Override
 		public RequestBodySpec uri(String uriTemplate, Object... uriVariables) {
-			attribute(URI_TEMPLATE_ATTRIBUTE, uriTemplate);
-			return uri(uriBuilderFactory.expand(uriTemplate, uriVariables));
+			UriBuilder uriBuilder = uriBuilderFactory.uriString(uriTemplate);
+			attribute(URI_TEMPLATE_ATTRIBUTE, uriBuilder.toUriString());
+			return uri(uriBuilder.build(uriVariables));
 		}
 
 		@Override
 		public RequestBodySpec uri(String uriTemplate, Map<String, ?> uriVariables) {
-			attribute(URI_TEMPLATE_ATTRIBUTE, uriTemplate);
-			return uri(uriBuilderFactory.expand(uriTemplate, uriVariables));
+			UriBuilder uriBuilder = uriBuilderFactory.uriString(uriTemplate);
+			attribute(URI_TEMPLATE_ATTRIBUTE, uriBuilder.toUriString());
+			return uri(uriBuilder.build(uriVariables));
 		}
 
 		@Override
 		public RequestBodySpec uri(String uriTemplate, Function<UriBuilder, URI> uriFunction) {
-			attribute(URI_TEMPLATE_ATTRIBUTE, uriTemplate);
-			return uri(uriFunction.apply(uriBuilderFactory.uriString(uriTemplate)));
+			UriBuilder uriBuilder = uriBuilderFactory.uriString(uriTemplate);
+			attribute(URI_TEMPLATE_ATTRIBUTE, uriBuilder.toUriString());
+			return uri(uriFunction.apply(uriBuilder));
 		}
 
 		@Override
@@ -361,6 +368,12 @@ final class DefaultWebClient implements WebClient {
 		}
 
 		@Override
+		public <T> RequestHeadersSpec<?> bodyValue(T body, ParameterizedTypeReference<T> bodyType) {
+			this.inserter = BodyInserters.fromValue(body, bodyType);
+			return this;
+		}
+
+		@Override
 		public <T, P extends Publisher<T>> RequestHeadersSpec<?> body(
 				P publisher, ParameterizedTypeReference<T> elementTypeRef) {
 			this.inserter = BodyInserters.fromPublisher(publisher, elementTypeRef);
@@ -435,12 +448,11 @@ final class DefaultWebClient implements WebClient {
 		@SuppressWarnings("deprecation")
 		@Override
 		public Mono<ClientResponse> exchange() {
-			ClientRequestObservationContext observationContext = new ClientRequestObservationContext();
 			ClientRequest.Builder requestBuilder = initRequestBuilder();
+			ClientRequestObservationContext observationContext = new ClientRequestObservationContext(requestBuilder);
 			return Mono.deferContextual(contextView -> {
 				Observation observation = ClientHttpObservationDocumentation.HTTP_REACTIVE_CLIENT_EXCHANGES.observation(observationConvention,
 						DEFAULT_OBSERVATION_CONVENTION, () -> observationContext, observationRegistry);
-				observationContext.setCarrier(requestBuilder);
 				observation
 						.parentObservation(contextView.getOrDefault(ObservationThreadLocalAccessor.KEY, null))
 						.start();
@@ -453,7 +465,9 @@ final class DefaultWebClient implements WebClient {
 				observationContext.setRequest(request);
 				Mono<ClientResponse> responseMono = filterFunction.apply(exchangeFunction)
 						.exchange(request)
-						.checkpoint("Request to " + this.httpMethod.name() + " " + this.uri + " [DefaultWebClient]")
+						.checkpoint("Request to " +
+								WebClientUtils.getRequestDescription(request.method(), request.url()) +
+								" [DefaultWebClient]")
 						.switchIfEmpty(NO_HTTP_CLIENT_RESPONSE_ERROR);
 				if (this.contextModifier != null) {
 					responseMono = responseMono.contextWrite(this.contextModifier);
@@ -461,7 +475,7 @@ final class DefaultWebClient implements WebClient {
 				final AtomicBoolean responseReceived = new AtomicBoolean();
 				return responseMono
 						.doOnNext(response -> responseReceived.set(true))
-						.doOnError(observationContext::setError)
+						.doOnError(observation::error)
 						.doFinally(signalType -> {
 							if (signalType == SignalType.CANCEL && !responseReceived.get()) {
 								observationContext.setAborted(true);
@@ -473,9 +487,6 @@ final class DefaultWebClient implements WebClient {
 		}
 
 		private ClientRequest.Builder initRequestBuilder() {
-			if (defaultRequest != null) {
-				defaultRequest.accept(this);
-			}
 			ClientRequest.Builder builder = ClientRequest.create(this.httpMethod, initUri())
 					.headers(this::initHeaders)
 					.cookies(this::initCookies)
@@ -515,10 +526,9 @@ final class DefaultWebClient implements WebClient {
 
 	private static class DefaultResponseSpec implements ResponseSpec {
 
-		private static final Predicate<HttpStatusCode> STATUS_CODE_ERROR = HttpStatusCode::isError;
-
 		private static final StatusHandler DEFAULT_STATUS_HANDLER =
-				new StatusHandler(STATUS_CODE_ERROR, ClientResponse::createException);
+				new StatusHandler(code -> code.value() >= 400, ClientResponse::createException);
+
 
 		private final HttpMethod httpMethod;
 
@@ -689,22 +699,11 @@ final class DefaultWebClient implements WebClient {
 					}
 					Mono<T> result = exMono.flatMap(Mono::error);
 					return result.checkpoint(statusCode + " from " +
-							this.httpMethod + " " + getUriToLog(this.uri) + " [DefaultWebClient]");
+							WebClientUtils.getRequestDescription(this.httpMethod, this.uri) +
+							" [DefaultWebClient]");
 				}
 			}
 			return null;
-		}
-
-		private static URI getUriToLog(URI uri) {
-			if (StringUtils.hasText(uri.getQuery())) {
-				try {
-					uri = new URI(uri.getScheme(), uri.getHost(), uri.getPath(), null);
-				}
-				catch (URISyntaxException ex) {
-					// ignore
-				}
-			}
-			return uri;
 		}
 
 

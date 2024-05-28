@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2023 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,6 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 
 	private static final long serialVersionUID = -8697084563854098920L;
 
-	@SuppressWarnings("serial")
 	private final MultiValueMap<K, V> delegate;
 
 	@Nullable
@@ -97,6 +96,7 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 	}
 
 	@Override
+	@Nullable
 	public V getFirst(K key) {
 		return this.delegate.getFirst(key);
 	}
@@ -120,6 +120,10 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 		return this.delegate.toSingleValueMap();
 	}
 
+	@Override
+	public Map<K, V> asSingleValueMap() {
+		return this.delegate.asSingleValueMap();
+	}
 
 	@Override
 	public boolean equals(@Nullable Object other) {
@@ -266,7 +270,6 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 
 		private static final long serialVersionUID = 2407578793783925203L;
 
-		@SuppressWarnings("serial")
 		private final Set<Entry<K, List<V>>> delegate;
 
 		@SuppressWarnings("unchecked")
@@ -516,7 +519,6 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 
 		private static final long serialVersionUID = 5518377583904339588L;
 
-		@SuppressWarnings("serial")
 		private final Collection<List<V>> delegate;
 
 		public UnmodifiableValueCollection(Collection<List<V>> delegate) {

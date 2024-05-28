@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2023 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package org.springframework.http.server;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -37,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Arjen Poutsma
  * @author Juergen Hoeller
  */
-public class ServletServerHttpRequestTests {
+class ServletServerHttpRequestTests {
 
 	private ServletServerHttpRequest request;
 
@@ -58,7 +57,7 @@ public class ServletServerHttpRequestTests {
 	}
 
 	@Test
-	void getUriForSimplePath() throws URISyntaxException {
+	void getUriForSimplePath() {
 		URI uri = URI.create("https://example.com/path");
 		mockRequest.setScheme(uri.getScheme());
 		mockRequest.setServerName(uri.getHost());
@@ -69,7 +68,7 @@ public class ServletServerHttpRequestTests {
 	}
 
 	@Test
-	void getUriWithQueryString() throws URISyntaxException {
+	void getUriWithQueryString() {
 		URI uri = URI.create("https://example.com/path?query");
 		mockRequest.setScheme(uri.getScheme());
 		mockRequest.setServerName(uri.getHost());
@@ -80,7 +79,7 @@ public class ServletServerHttpRequestTests {
 	}
 
 	@Test  // SPR-16414
-	void getUriWithQueryParam() throws URISyntaxException {
+	void getUriWithQueryParam() {
 		mockRequest.setScheme("https");
 		mockRequest.setServerPort(443);
 		mockRequest.setServerName("example.com");
@@ -90,7 +89,7 @@ public class ServletServerHttpRequestTests {
 	}
 
 	@Test  // SPR-16414
-	void getUriWithMalformedQueryParam() throws URISyntaxException {
+	void getUriWithMalformedQueryParam() {
 		mockRequest.setScheme("https");
 		mockRequest.setServerPort(443);
 		mockRequest.setServerName("example.com");
@@ -100,7 +99,7 @@ public class ServletServerHttpRequestTests {
 	}
 
 	@Test  // SPR-13876
-	void getUriWithEncoding() throws URISyntaxException {
+	void getUriWithEncoding() {
 		URI uri = URI.create("https://example.com/%E4%B8%AD%E6%96%87" +
 				"?redirect=https%3A%2F%2Fgithub.com%2Fspring-projects%2Fspring-framework");
 		mockRequest.setScheme(uri.getScheme());
@@ -125,6 +124,7 @@ public class ServletServerHttpRequestTests {
 		assertThat(headers).as("No HttpHeaders returned").isNotNull();
 		assertThat(headers.containsKey(headerName)).as("Invalid headers returned").isTrue();
 		List<String> headerValues = headers.get(headerName);
+		assertThat(headerValues).as("No header values returned").isNotNull();
 		assertThat(headerValues.size()).as("Invalid header values returned").isEqualTo(2);
 		assertThat(headerValues.contains(headerValue1)).as("Invalid header values returned").isTrue();
 		assertThat(headerValues.contains(headerValue2)).as("Invalid header values returned").isTrue();
@@ -151,7 +151,7 @@ public class ServletServerHttpRequestTests {
 		assertThat(headers.getContentType()).isNull();
 	}
 
-	@Test // gh-27957
+	@Test  // gh-27957
 	void getHeadersWithWildcardContentType() {
 		mockRequest.setContentType("*/*");
 		mockRequest.removeHeader("Content-Type");
@@ -167,7 +167,7 @@ public class ServletServerHttpRequestTests {
 		assertThat(result).as("Invalid content returned").isEqualTo(content);
 	}
 
-	@Test // gh-13318
+	@Test  // gh-13318
 	void getFormBody() throws IOException {
 		mockRequest.setContentType("application/x-www-form-urlencoded; charset=UTF-8");
 		mockRequest.setMethod("POST");
@@ -190,7 +190,7 @@ public class ServletServerHttpRequestTests {
 		assertThat(result).as("Invalid content returned").isEqualTo(content);
 	}
 
-	@Test // gh-31327
+	@Test  // gh-31327
 	void getFormBodyWhenQueryParamsAlsoPresent() throws IOException {
 		mockRequest.setContentType("application/x-www-form-urlencoded; charset=UTF-8");
 		mockRequest.setMethod("POST");
@@ -202,6 +202,19 @@ public class ServletServerHttpRequestTests {
 		byte[] result = FileCopyUtils.copyToByteArray(request.getBody());
 		byte[] content = "foo=bar".getBytes(StandardCharsets.UTF_8);
 		assertThat(result).as("Invalid content returned").isEqualTo(content);
+	}
+
+	@Test  // gh-32471
+	void getFormBodyWhenNotEncodedCharactersPresent() throws IOException {
+		mockRequest.setContentType("application/x-www-form-urlencoded; charset=UTF-8");
+		mockRequest.setMethod("POST");
+		mockRequest.addParameter("name", "Test");
+		mockRequest.addParameter("lastName", "Test@er");
+		mockRequest.addHeader("Content-Length", 26);
+
+		byte[] result = FileCopyUtils.copyToByteArray(request.getBody());
+		assertThat(result).isEqualTo("name=Test&lastName=Test%40er".getBytes(StandardCharsets.UTF_8));
+		assertThat(request.getHeaders().getContentLength()).isEqualTo(result.length);
 	}
 
 }

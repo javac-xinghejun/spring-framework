@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2023 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,6 +50,7 @@ import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -57,7 +58,7 @@ import org.springframework.web.util.WebUtils;
 
 /**
  * A class with an {@code @ExceptionHandler} method that handles all Spring MVC
- * raised exceptions by returning a {@link ResponseEntity} with RFC 7807
+ * raised exceptions by returning a {@link ResponseEntity} with RFC 9457
  * formatted error details in the body.
  *
  * <p>Convenient as a base class of an {@link ControllerAdvice @ControllerAdvice}
@@ -128,6 +129,7 @@ public abstract class ResponseEntityExceptionHandler implements MessageSourceAwa
 			NoResourceFoundException.class,
 			AsyncRequestTimeoutException.class,
 			ErrorResponseException.class,
+			MaxUploadSizeExceededException.class,
 			ConversionNotSupportedException.class,
 			TypeMismatchException.class,
 			HttpMessageNotReadableException.class,
@@ -176,6 +178,9 @@ public abstract class ResponseEntityExceptionHandler implements MessageSourceAwa
 		else if (ex instanceof ErrorResponseException subEx) {
 			return handleErrorResponseException(subEx, subEx.getHeaders(), subEx.getStatusCode(), request);
 		}
+		else if (ex instanceof MaxUploadSizeExceededException subEx) {
+			return handleMaxUploadSizeExceededException(subEx, subEx.getHeaders(), subEx.getStatusCode(), request);
+		}
 
 		// Lower level exceptions, and exceptions used symmetrically on client and server
 
@@ -194,9 +199,6 @@ public abstract class ResponseEntityExceptionHandler implements MessageSourceAwa
 		}
 		else if (ex instanceof MethodValidationException subEx) {
 			return handleMethodValidationException(subEx, headers, HttpStatus.INTERNAL_SERVER_ERROR, request);
-		}
-		else if (ex instanceof BindException theEx) {
-			return handleBindException(theEx, headers, HttpStatus.BAD_REQUEST, request);
 		}
 		else {
 			// Unknown exception, typically a wrapper with a common MVC exception as cause
@@ -436,6 +438,24 @@ public abstract class ResponseEntityExceptionHandler implements MessageSourceAwa
 	}
 
 	/**
+	 * Customize the handling of any {@link MaxUploadSizeExceededException}.
+	 * <p>This method delegates to {@link #handleExceptionInternal}.
+	 * @param ex the exception to handle
+	 * @param headers the headers to use for the response
+	 * @param status the status code to use for the response
+	 * @param request the current request
+	 * @return a {@code ResponseEntity} for the response to use, possibly
+	 * {@code null} when the response is already committed
+	 * @since 6.1
+	 */
+	@Nullable
+	protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
+			MaxUploadSizeExceededException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+
+		return handleExceptionInternal(ex, null, headers, status, request);
+	}
+
+	/**
 	 * Customize the handling of {@link ConversionNotSupportedException}.
 	 * <p>By default this method creates a {@link ProblemDetail} with the status
 	 * and a short detail message, and also looks up an override for the detail
@@ -527,30 +547,6 @@ public abstract class ResponseEntityExceptionHandler implements MessageSourceAwa
 	}
 
 	/**
-	 * Customize the handling of {@link BindException}.
-	 * <p>By default this method creates a {@link ProblemDetail} with the status
-	 * and a short detail message, and then delegates to
-	 * {@link #handleExceptionInternal}.
-	 * @param ex the exception to handle
-	 * @param headers the headers to use for the response
-	 * @param status the status code to use for the response
-	 * @param request the current request
-	 * @return a {@code ResponseEntity} for the response to use, possibly
-	 * {@code null} when the response is already committed
-	 * @deprecated as of 6.0 since {@link org.springframework.web.method.annotation.ModelAttributeMethodProcessor}
-	 * now raises the {@link MethodArgumentNotValidException} subclass instead.
-	 */
-	@Nullable
-	@Deprecated(since = "6.0", forRemoval = true)
-	protected ResponseEntity<Object> handleBindException(
-			BindException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-
-		ProblemDetail body = ProblemDetail.forStatusAndDetail(status, "Failed to bind request");
-		return handleExceptionInternal(ex, body, headers, status, request);
-	}
-
-
-	/**
 	 * Customize the handling of {@link MethodValidationException}.
 	 * <p>By default this method creates a {@link ProblemDetail} with the status
 	 * and a short detail message, and also looks up an override for the detail
@@ -580,8 +576,9 @@ public abstract class ResponseEntityExceptionHandler implements MessageSourceAwa
 	 * @param status the status to associate with the exception
 	 * @param defaultDetail default value for the "detail" field
 	 * @param detailMessageCode the code to use to look up the "detail" field
-	 * through a {@code MessageSource}, falling back on
-	 * {@link ErrorResponse#getDefaultDetailMessageCode(Class, String)}
+	 * through a {@code MessageSource}; if {@code null} then
+	 * {@link ErrorResponse#getDefaultDetailMessageCode(Class, String)} is used
+	 * to determine the default message code to use
 	 * @param detailMessageArguments the arguments to go with the detailMessageCode
 	 * @param request the current request
 	 * @return the created {@code ProblemDetail} instance
@@ -634,12 +631,12 @@ public abstract class ResponseEntityExceptionHandler implements MessageSourceAwa
 			}
 		}
 
-		if (statusCode.equals(HttpStatus.INTERNAL_SERVER_ERROR)) {
-			request.setAttribute(WebUtils.ERROR_EXCEPTION_ATTRIBUTE, ex, WebRequest.SCOPE_REQUEST);
-		}
-
 		if (body == null && ex instanceof ErrorResponse errorResponse) {
 			body = errorResponse.updateAndGetBody(this.messageSource, LocaleContextHolder.getLocale());
+		}
+
+		if (statusCode.equals(HttpStatus.INTERNAL_SERVER_ERROR) && body == null) {
+			request.setAttribute(WebUtils.ERROR_EXCEPTION_ATTRIBUTE, ex, WebRequest.SCOPE_REQUEST);
 		}
 
 		return createResponseEntity(body, headers, statusCode, request);

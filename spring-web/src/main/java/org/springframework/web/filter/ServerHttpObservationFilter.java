@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,6 +106,7 @@ public class ServerHttpObservationFilter extends OncePerRequestFilter {
 
 		Observation observation = createOrFetchObservation(request, response);
 		try (Observation.Scope scope = observation.openScope()) {
+			onScopeOpened(scope, request, response);
 			filterChain.doFilter(request, response);
 		}
 		catch (Exception ex) {
@@ -125,6 +126,17 @@ public class ServerHttpObservationFilter extends OncePerRequestFilter {
 		}
 	}
 
+	/**
+	 * Notify this filter that a new {@link Observation.Scope} is opened for the
+	 * observation that was just created.
+	 * @param scope the newly opened observation scope
+	 * @param request the HTTP client request
+	 * @param response the filter's response
+	 * @since 6.2
+	 */
+	protected void onScopeOpened(Observation.Scope scope, HttpServletRequest request, HttpServletResponse response) {
+	}
+
 	private Observation createOrFetchObservation(HttpServletRequest request, HttpServletResponse response) {
 		Observation observation = (Observation) request.getAttribute(CURRENT_OBSERVATION_ATTRIBUTE);
 		if (observation == null) {
@@ -139,6 +151,7 @@ public class ServerHttpObservationFilter extends OncePerRequestFilter {
 		return observation;
 	}
 
+	@Nullable
 	private Throwable unwrapServletException(Throwable ex) {
 		return (ex instanceof ServletException) ? ex.getCause() : ex;
 	}

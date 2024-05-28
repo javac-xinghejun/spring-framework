@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2023 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,17 +22,17 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-import org.junit.jupiter.api.condition.DisabledIf;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 /**
- * {@code @DisabledInAotMode} signals that an annotated test class is <em>disabled</em>
+ * {@code @DisabledInAotMode} signals that the annotated test class is <em>disabled</em>
  * in Spring AOT (ahead-of-time) mode, which means that the {@code ApplicationContext}
  * for the test class will not be processed for AOT optimizations at build time.
  *
  * <p>If a test class is annotated with {@code @DisabledInAotMode}, all other test
  * classes which specify configuration to load the same {@code ApplicationContext}
  * must also be annotated with {@code @DisabledInAotMode}. Failure to annotate
- * all such test classes will result in a exception, either at build time or
+ * all such test classes will result in an exception, either at build time or
  * run time.
  *
  * <p>When used with JUnit Jupiter based tests, {@code @DisabledInAotMode} also
@@ -48,6 +48,7 @@ import org.junit.jupiter.api.condition.DisabledIf;
  * annotation.
  *
  * @author Sam Brannen
+ * @author Stephane Nicoll
  * @since 6.1
  * @see org.springframework.aot.AotDetector#useGeneratedArtifacts() AotDetector.useGeneratedArtifacts()
  * @see org.junit.jupiter.api.condition.EnabledInNativeImage @EnabledInNativeImage
@@ -56,7 +57,6 @@ import org.junit.jupiter.api.condition.DisabledIf;
 @Target({ElementType.TYPE, ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
-@DisabledIf(value = "org.springframework.aot.AotDetector#useGeneratedArtifacts",
-		disabledReason = "Disabled in Spring AOT mode")
+@ExtendWith(DisabledInAotModeCondition.class)
 public @interface DisabledInAotMode {
 }

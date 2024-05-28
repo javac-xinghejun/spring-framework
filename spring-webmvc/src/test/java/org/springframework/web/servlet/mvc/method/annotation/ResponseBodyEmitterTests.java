@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2023 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 /**
- * Unit tests for {@link ResponseBodyEmitter}.
+ * Tests for {@link ResponseBodyEmitter}.
  *
  * @author Rossen Stoyanchev
  * @author Tomasz Nurkiewicz
@@ -145,23 +145,6 @@ public class ResponseBodyEmitterTests {
 		willThrow(new IOException()).given(this.handler).send("foo", MediaType.TEXT_PLAIN);
 		assertThatIOException().isThrownBy(() -> this.emitter.send("foo", MediaType.TEXT_PLAIN));
 		verify(this.handler).send("foo", MediaType.TEXT_PLAIN);
-		verifyNoMoreInteractions(this.handler);
-	}
-
-	@Test // gh-30687
-	void completeIgnoredAfterIOException() throws Exception {
-		this.emitter.initialize(this.handler);
-		verify(this.handler).onTimeout(any());
-		verify(this.handler).onError(any());
-		verify(this.handler).onCompletion(any());
-		verifyNoMoreInteractions(this.handler);
-
-		willThrow(new IOException()).given(this.handler).send("foo", MediaType.TEXT_PLAIN);
-		assertThatIOException().isThrownBy(() -> this.emitter.send("foo", MediaType.TEXT_PLAIN));
-		verify(this.handler).send("foo", MediaType.TEXT_PLAIN);
-		verifyNoMoreInteractions(this.handler);
-
-		this.emitter.complete();
 		verifyNoMoreInteractions(this.handler);
 	}
 

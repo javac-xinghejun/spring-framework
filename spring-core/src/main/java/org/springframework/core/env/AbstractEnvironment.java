@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2023 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,7 +97,7 @@ public abstract class AbstractEnvironment implements ConfigurableEnvironment {
 	 * @see AbstractEnvironment#DEFAULT_PROFILES_PROPERTY_NAME
 	 * @see AbstractEnvironment#ACTIVE_PROFILES_PROPERTY_NAME
 	 */
-	protected static final String RESERVED_DEFAULT_PROFILE_NAME = "default";
+	public static final String RESERVED_DEFAULT_PROFILE_NAME = "default";
 
 
 	protected final Log logger = LogFactory.getLog(getClass());
@@ -519,6 +519,11 @@ public abstract class AbstractEnvironment implements ConfigurableEnvironment {
 	@Override
 	public void setValueSeparator(@Nullable String valueSeparator) {
 		this.propertyResolver.setValueSeparator(valueSeparator);
+	}
+
+	@Override
+	public void setEscapeCharacter(@Nullable Character escapeCharacter) {
+		this.propertyResolver.setEscapeCharacter(escapeCharacter);
 	}
 
 	@Override

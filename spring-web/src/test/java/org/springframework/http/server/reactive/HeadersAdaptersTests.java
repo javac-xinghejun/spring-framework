@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2023 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-import java.util.Arrays;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 import java.util.stream.Stream;
 
@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Named.named;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 /**
- * Unit tests for {@code HeadersAdapters} {@code MultiValueMap} implementations.
+ * Tests for {@code HeadersAdapters} {@code MultiValueMap} implementations.
  *
  * @author Brian Clozel
  * @author Sam Brannen
@@ -89,13 +89,13 @@ class HeadersAdaptersTests {
 		headers.add("TestHeader", "first");
 		headers.add("TestHeader", "second");
 		assertThat(headers.getFirst("TestHeader")).isEqualTo("first");
-		assertThat(headers.get("TestHeader").get(0)).isEqualTo("first");
+		assertThat(headers.get("TestHeader")).first().isEqualTo("first");
 	}
 
 	@ParameterizedHeadersTest
 	void putShouldOverrideExisting(MultiValueMap<String, String> headers) {
 		headers.add("TestHeader", "first");
-		headers.put("TestHeader", Arrays.asList("override"));
+		headers.put("TestHeader", List.of("override"));
 		assertThat(headers.getFirst("TestHeader")).isEqualTo("override");
 		assertThat(headers.get("TestHeader")).hasSize(1);
 	}

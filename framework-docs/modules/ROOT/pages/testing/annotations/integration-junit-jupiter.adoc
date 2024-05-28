@@ -11,6 +11,7 @@ xref:testing/testcontext-framework/support-classes.adoc#testcontext-junit-jupite
 * xref:testing/annotations/integration-junit-jupiter.adoc#integration-testing-annotations-nestedtestconfiguration[`@NestedTestConfiguration`]
 * xref:testing/annotations/integration-junit-jupiter.adoc#integration-testing-annotations-junit-jupiter-enabledif[`@EnabledIf`]
 * xref:testing/annotations/integration-junit-jupiter.adoc#integration-testing-annotations-junit-jupiter-disabledif[`@DisabledIf`]
+* xref:testing/annotations/integration-spring/annotation-disabledinaotmode.adoc[`@DisabledInAotMode`]
 
 [[integration-testing-annotations-junit-jupiter-springjunitconfig]]
 == `@SpringJUnitConfig`
@@ -81,7 +82,7 @@ Kotlin::
 
 
 See xref:testing/testcontext-framework/ctx-management.adoc[Context Management] as well as the javadoc for
-{api-spring-framework}/test/context/junit/jupiter/SpringJUnitConfig.html[`@SpringJUnitConfig`]
+{spring-framework-api}/test/context/junit/jupiter/SpringJUnitConfig.html[`@SpringJUnitConfig`]
 and `@ContextConfiguration` for further details.
 
 [[integration-testing-annotations-junit-jupiter-springjunitwebconfig]]
@@ -156,16 +157,16 @@ Kotlin::
 
 
 See xref:testing/testcontext-framework/ctx-management.adoc[Context Management] as well as the javadoc for
-{api-spring-framework}/test/context/junit/jupiter/web/SpringJUnitWebConfig.html[`@SpringJUnitWebConfig`],
-{api-spring-framework}/test/context/ContextConfiguration.html[`@ContextConfiguration`], and
-{api-spring-framework}/test/context/web/WebAppConfiguration.html[`@WebAppConfiguration`]
+{spring-framework-api}/test/context/junit/jupiter/web/SpringJUnitWebConfig.html[`@SpringJUnitWebConfig`],
+{spring-framework-api}/test/context/ContextConfiguration.html[`@ContextConfiguration`], and
+{spring-framework-api}/test/context/web/WebAppConfiguration.html[`@WebAppConfiguration`]
 for further details.
 
 [[integration-testing-annotations-testconstructor]]
 == `@TestConstructor`
 
-`@TestConstructor` is a type-level annotation that is used to configure how the parameters
-of a test class constructor are autowired from components in the test's
+`@TestConstructor` is an annotation that can be applied to a test class to configure how
+the parameters of a test class constructor are autowired from components in the test's
 `ApplicationContext`.
 
 If `@TestConstructor` is not present or meta-present on a test class, the default _test
@@ -198,9 +199,9 @@ Spring Boot Test.
 [[integration-testing-annotations-nestedtestconfiguration]]
 == `@NestedTestConfiguration`
 
-`@NestedTestConfiguration` is a type-level annotation that is used to configure how
-Spring test configuration annotations are processed within enclosing class hierarchies
-for inner test classes.
+`@NestedTestConfiguration` is an annotation that can be applied to a test class to
+configure how Spring test configuration annotations are processed within enclosing class
+hierarchies for inner test classes.
 
 If `@NestedTestConfiguration` is not present or meta-present on a test class, in its
 supertype hierarchy, or in its enclosing class hierarchy, the default _enclosing

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.server.RequestPath;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Controller;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,6 +47,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.context.support.StaticWebApplicationContext;
 import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.PreFlightRequestHandler;
 import org.springframework.web.servlet.HandlerExecutionChain;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.handler.PathPatternsParameterizedTest;
@@ -126,7 +128,7 @@ class CrossOriginTests {
 		request.addHeader(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET");
 		HandlerExecutionChain chain = mapping.getHandler(request);
 		assertThat(chain).isNotNull();
-		assertThat(chain.getHandler().getClass().getName()).endsWith("AbstractHandlerMapping$PreFlightHandler");
+		assertThat(chain.getHandler()).isInstanceOf(PreFlightRequestHandler.class);
 	}
 
 	@PathPatternsParameterizedTest  // SPR-12931
@@ -388,7 +390,7 @@ class CrossOriginTests {
 		assertThat(chain).isNotNull();
 		if (isPreFlightRequest) {
 			Object handler = chain.getHandler();
-			assertThat(handler.getClass().getSimpleName()).isEqualTo("PreFlightHandler");
+			assertThat(handler).isInstanceOf(PreFlightRequestHandler.class);
 			DirectFieldAccessor accessor = new DirectFieldAccessor(handler);
 			return (CorsConfiguration)accessor.getPropertyValue("config");
 		}
@@ -595,8 +597,8 @@ class CrossOriginTests {
 			RequestMapping annotation = AnnotatedElementUtils.findMergedAnnotation(method, RequestMapping.class);
 			if (annotation != null) {
 				RequestMappingInfo.BuilderConfiguration options = new RequestMappingInfo.BuilderConfiguration();
-				if (getPatternParser() != null) {
-					options.setPatternParser(getPatternParser());
+				if (getPatternParser() == null) {
+					options.setPathMatcher(new AntPathMatcher());
 				}
 				return RequestMappingInfo.paths(annotation.value())
 						.methods(annotation.method())

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2023 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 package org.springframework.jdbc.core.metadata;
 
-import java.sql.DatabaseMetaData;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -434,14 +433,14 @@ public class CallMetaDataContext {
 					if (paramNameToUse == null) {
 						paramNameToUse = "";
 					}
-					if (meta.getParameterType() == DatabaseMetaData.procedureColumnOut) {
+					if (meta.isOutParameter()) {
 						workParams.add(provider.createDefaultOutParameter(paramNameToUse, meta));
 						outParamNames.add(paramNameToUse);
 						if (logger.isDebugEnabled()) {
 							logger.debug("Added meta-data out parameter for '" + paramNameToUse + "'");
 						}
 					}
-					else if (meta.getParameterType() == DatabaseMetaData.procedureColumnInOut) {
+					else if (meta.isInOutParameter()) {
 						workParams.add(provider.createDefaultInOutParameter(paramNameToUse, meta));
 						outParamNames.add(paramNameToUse);
 						if (logger.isDebugEnabled()) {
@@ -677,7 +676,8 @@ public class CallMetaDataContext {
 	 * @since 4.2
 	 */
 	protected String createParameterBinding(SqlParameter parameter) {
-		return (isNamedBinding() ? parameter.getName() + " => ?" : "?");
+		Assert.state(this.metaDataProvider != null, "No CallMetaDataProvider available");
+		return (isNamedBinding() ? this.metaDataProvider.namedParameterBindingToUse(parameter.getName()) : "?");
 	}
 
 	private static String lowerCase(@Nullable String paramName) {

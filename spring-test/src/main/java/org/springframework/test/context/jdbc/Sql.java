@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2023 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,13 +55,15 @@ import org.springframework.core.annotation.AliasFor;
  * annotation. Otherwise, {@link SqlGroup @SqlGroup} can be used as an explicit
  * container for declaring multiple instances of {@code @Sql}.
  *
- * <p>This annotation may be used as a <em>meta-annotation</em> to create custom
- * <em>composed annotations</em> with attribute overrides.
- *
- * <p>As of Spring Framework 5.3, this annotation will be inherited from an
- * enclosing test class by default. See
+ * <p>This annotation will be inherited from an enclosing test class by default. See
  * {@link org.springframework.test.context.NestedTestConfiguration @NestedTestConfiguration}
- * for details.
+ * for details. This annotation may also be used as a <em>meta-annotation</em> to
+ * create custom <em>composed annotations</em> with attribute overrides.
+ *
+ * <p>If you want to see which SQL scripts are being executed, set the
+ * {@code org.springframework.test.context.jdbc} logging category to {@code DEBUG}.
+ * If you want to see which SQL statements are being executed, set the
+ * {@code org.springframework.jdbc.datasource.init} logging category to {@code DEBUG}.
  *
  * <p>Use of this annotation requires the {@code spring-jdbc} and {@code spring-tx}
  * modules as well as their transitive dependencies to be present on the classpath.
@@ -169,28 +171,67 @@ public @interface Sql {
 	enum ExecutionPhase {
 
 		/**
-		 * The configured SQL scripts and statements will be executed
-		 * once per test class <em>before</em> any test method is run.
+		 * The configured SQL scripts and statements will be executed once per
+		 * test class <em>before</em> any test method is run.
+		 * <p>Specifically, the configured SQL scripts and statements will be
+		 * executed prior to any <em>before class lifecycle methods</em> of a
+		 * particular testing framework &mdash; for example, methods annotated
+		 * with JUnit Jupiter's {@link org.junit.jupiter.api.BeforeAll @BeforeAll}
+		 * annotation.
+		 * <p>NOTE: Configuring {@code BEFORE_TEST_CLASS} as the execution phase
+		 * causes the test's {@code ApplicationContext} to be eagerly loaded
+		 * during test class initialization which can potentially result in
+		 * undesired side effects. For example,
+		 * {@link org.springframework.test.context.DynamicPropertySource @DynamicPropertySource}
+		 * methods will be invoked before {@code @BeforeAll} methods when using
+		 * {@code BEFORE_TEST_CLASS}.
 		 * @since 6.1
+		 * @see #AFTER_TEST_CLASS
+		 * @see #BEFORE_TEST_METHOD
+		 * @see #AFTER_TEST_METHOD
 		 */
 		BEFORE_TEST_CLASS,
 
 		/**
-		 * The configured SQL scripts and statements will be executed
-		 * once per test class <em>after</em> all test methods have run.
+		 * The configured SQL scripts and statements will be executed once per
+		 * test class <em>after</em> all test methods have run.
+		 * <p>Specifically, the configured SQL scripts and statements will be
+		 * executed after any <em>after class lifecycle methods</em> of a
+		 * particular testing framework &mdash; for example, methods annotated
+		 * with JUnit Jupiter's {@link org.junit.jupiter.api.AfterAll @AfterAll}
+		 * annotation.
 		 * @since 6.1
+		 * @see #BEFORE_TEST_CLASS
+		 * @see #BEFORE_TEST_METHOD
+		 * @see #AFTER_TEST_METHOD
 		 */
 		AFTER_TEST_CLASS,
 
 		/**
 		 * The configured SQL scripts and statements will be executed
 		 * <em>before</em> the corresponding test method.
+		 * <p>Specifically, the configured SQL scripts and statements will be
+		 * executed prior to any <em>before test lifecycle methods</em> of a
+		 * particular testing framework &mdash; for example, methods annotated
+		 * with JUnit Jupiter's {@link org.junit.jupiter.api.BeforeEach @BeforeEach}
+		 * annotation.
+		 * @see #BEFORE_TEST_CLASS
+		 * @see #AFTER_TEST_CLASS
+		 * @see #AFTER_TEST_METHOD
 		 */
 		BEFORE_TEST_METHOD,
 
 		/**
 		 * The configured SQL scripts and statements will be executed
 		 * <em>after</em> the corresponding test method.
+		 * <p>Specifically, the configured SQL scripts and statements will be
+		 * executed after any <em>after test lifecycle methods</em> of a
+		 * particular testing framework &mdash; for example, methods annotated
+		 * with JUnit Jupiter's {@link org.junit.jupiter.api.AfterEach @AfterEach}
+		 * annotation.
+		 * @see #BEFORE_TEST_CLASS
+		 * @see #AFTER_TEST_CLASS
+		 * @see #BEFORE_TEST_METHOD
 		 */
 		AFTER_TEST_METHOD
 	}

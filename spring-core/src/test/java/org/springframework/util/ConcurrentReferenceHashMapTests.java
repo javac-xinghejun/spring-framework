@@ -37,6 +37,7 @@ import org.springframework.util.comparator.Comparators;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 
 /**
  * Tests for {@link ConcurrentReferenceHashMap}.
@@ -95,26 +96,23 @@ class ConcurrentReferenceHashMapTests {
 
 	@Test
 	void shouldNeedNonNegativeInitialCapacity() {
-		new ConcurrentReferenceHashMap<Integer, String>(0, 1);
-		assertThatIllegalArgumentException().isThrownBy(() ->
-				new TestWeakConcurrentCache<Integer, String>(-1, 1))
-			.withMessageContaining("Initial capacity must not be negative");
+		assertThatNoException().isThrownBy(() -> new ConcurrentReferenceHashMap<Integer, String>(0, 1));
+		assertThatIllegalArgumentException().isThrownBy(() -> new ConcurrentReferenceHashMap<Integer, String>(-1, 1))
+				.withMessageContaining("Initial capacity must not be negative");
 	}
 
 	@Test
 	void shouldNeedPositiveLoadFactor() {
-		new ConcurrentReferenceHashMap<Integer, String>(0, 0.1f, 1);
-		assertThatIllegalArgumentException().isThrownBy(() ->
-				new TestWeakConcurrentCache<Integer, String>(0, 0.0f, 1))
-			.withMessageContaining("Load factor must be positive");
+		assertThatNoException().isThrownBy(() -> new ConcurrentReferenceHashMap<Integer, String>(0, 0.1f, 1));
+		assertThatIllegalArgumentException().isThrownBy(() -> new ConcurrentReferenceHashMap<Integer, String>(0, 0.0f, 1))
+				.withMessageContaining("Load factor must be positive");
 	}
 
 	@Test
 	void shouldNeedPositiveConcurrencyLevel() {
-		new ConcurrentReferenceHashMap<Integer, String>(1, 1);
-		assertThatIllegalArgumentException().isThrownBy(() ->
-				new TestWeakConcurrentCache<Integer, String>(1, 0))
-			.withMessageContaining("Concurrency level must be positive");
+		assertThatNoException().isThrownBy(() -> new ConcurrentReferenceHashMap<Integer, String>(1, 1));
+		assertThatIllegalArgumentException().isThrownBy(() -> new ConcurrentReferenceHashMap<Integer, String>(1, 0))
+				.withMessageContaining("Concurrency level must be positive");
 	}
 
 	@Test
@@ -274,7 +272,7 @@ class ConcurrentReferenceHashMapTests {
 		assertThat(this.map.get(123)).isEqualTo("123");
 		assertThat(this.map.remove(123, "123")).isTrue();
 		assertThat(this.map.containsKey(123)).isFalse();
-		assertThat(this.map.isEmpty()).isTrue();
+		assertThat(this.map).isEmpty();
 	}
 
 	@Test
@@ -284,7 +282,7 @@ class ConcurrentReferenceHashMapTests {
 		assertThat(this.map.get(123)).isNull();
 		assertThat(this.map.remove(123, null)).isTrue();
 		assertThat(this.map.containsKey(123)).isFalse();
-		assertThat(this.map.isEmpty()).isTrue();
+		assertThat(this.map).isEmpty();
 	}
 
 	@Test
@@ -330,11 +328,11 @@ class ConcurrentReferenceHashMapTests {
 
 	@Test
 	void shouldSupportIsEmpty() {
-		assertThat(this.map.isEmpty()).isTrue();
+		assertThat(this.map).isEmpty();
 		this.map.put(123, "123");
 		this.map.put(123, null);
 		this.map.put(456, "456");
-		assertThat(this.map.isEmpty()).isFalse();
+		assertThat(this.map).isNotEmpty();
 	}
 
 	@Test
@@ -365,14 +363,14 @@ class ConcurrentReferenceHashMapTests {
 		assertThat(this.map.remove(123)).isNull();
 		assertThat(this.map.remove(456)).isEqualTo("456");
 		assertThat(this.map.remove(null)).isEqualTo("789");
-		assertThat(this.map.isEmpty()).isTrue();
+		assertThat(this.map).isEmpty();
 	}
 
 	@Test
 	void shouldRemoveWhenKeyIsNotInMap() {
 		assertThat(this.map.remove(123)).isNull();
 		assertThat(this.map.remove(null)).isNull();
-		assertThat(this.map.isEmpty()).isTrue();
+		assertThat(this.map).isEmpty();
 	}
 
 	@Test
@@ -490,28 +488,23 @@ class ConcurrentReferenceHashMapTests {
 		this.map.put(3, "3");
 		Set<Map.Entry<Integer, String>> entrySet = this.map.entrySet();
 		Set<Map.Entry<Integer, String>> copy = new HashMap<>(this.map).entrySet();
-		copy.forEach(entry -> assertThat(entrySet.contains(entry)).isTrue());
+		copy.forEach(entry -> assertThat(entrySet).contains(entry));
 		this.map.put(1, "A");
 		this.map.put(2, "B");
 		this.map.put(3, "C");
-		copy.forEach(entry -> assertThat(entrySet.contains(entry)).isFalse());
+		copy.forEach(entry -> assertThat(entrySet).doesNotContain(entry));
 		this.map.put(1, "1");
 		this.map.put(2, "2");
 		this.map.put(3, "3");
-		copy.forEach(entry -> assertThat(entrySet.contains(entry)).isTrue());
+		copy.forEach(entry -> assertThat(entrySet).contains(entry));
 		entrySet.clear();
-		copy.forEach(entry -> assertThat(entrySet.contains(entry)).isFalse());
+		copy.forEach(entry -> assertThat(entrySet).doesNotContain(entry));
 	}
 
 	@Test
 	void shouldSupportNullReference() {
 		// GC could happen during restructure so we must be able to create a reference for a null entry
 		map.createReferenceManager().createReference(null, 1234, null);
-	}
-
-	private interface ValueFactory<V> {
-
-		V newValue(int k);
 	}
 
 
@@ -521,29 +514,16 @@ class ConcurrentReferenceHashMapTests {
 
 		private final LinkedList<MockReference<K, V>> queue = new LinkedList<>();
 
-		private boolean disableTestHooks;
-
 		public TestWeakConcurrentCache() {
 			super();
-		}
-
-		public void setDisableTestHooks(boolean disableTestHooks) {
-			this.disableTestHooks = disableTestHooks;
 		}
 
 		public TestWeakConcurrentCache(int initialCapacity, float loadFactor, int concurrencyLevel) {
 			super(initialCapacity, loadFactor, concurrencyLevel);
 		}
 
-		public TestWeakConcurrentCache(int initialCapacity, int concurrencyLevel) {
-			super(initialCapacity, concurrencyLevel);
-		}
-
 		@Override
 		protected int getHash(@Nullable Object o) {
-			if (this.disableTestHooks) {
-				return super.getHash(o);
-			}
 			// For testing we want more control of the hash
 			this.supplementalHash = super.getHash(o);
 			return (o != null ? o.hashCode() : 0);
@@ -558,16 +538,10 @@ class ConcurrentReferenceHashMapTests {
 			return new ReferenceManager() {
 				@Override
 				public Reference<K, V> createReference(Entry<K, V> entry, int hash, @Nullable Reference<K, V> next) {
-					if (TestWeakConcurrentCache.this.disableTestHooks) {
-						return super.createReference(entry, hash, next);
-					}
 					return new MockReference<>(entry, hash, next, TestWeakConcurrentCache.this.queue);
 				}
 				@Override
 				public Reference<K, V> pollForPurge() {
-					if (TestWeakConcurrentCache.this.disableTestHooks) {
-						return super.pollForPurge();
-					}
 					return TestWeakConcurrentCache.this.queue.isEmpty() ? null : TestWeakConcurrentCache.this.queue.removeFirst();
 				}
 			};

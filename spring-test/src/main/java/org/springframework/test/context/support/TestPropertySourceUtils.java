@@ -79,7 +79,7 @@ public abstract class TestPropertySourceUtils {
 
 	private static final PropertySourceFactory defaultPropertySourceFactory = new DefaultPropertySourceFactory();
 
-	private static Comparator<MergedAnnotation<? extends Annotation>> reversedMetaDistance =
+	private static final Comparator<MergedAnnotation<? extends Annotation>> reversedMetaDistance =
 			Comparator.<MergedAnnotation<? extends Annotation>> comparingInt(MergedAnnotation::getDistance).reversed();
 
 	private static final Log logger = LogFactory.getLog(TestPropertySourceUtils.class);
@@ -135,6 +135,7 @@ public abstract class TestPropertySourceUtils {
 		return mergedAttributes;
 	}
 
+	@SuppressWarnings("NullAway")
 	private static boolean duplicationDetected(TestPropertySourceAttributes currentAttributes,
 			@Nullable TestPropertySourceAttributes previousAttributes) {
 
@@ -459,6 +460,7 @@ public abstract class TestPropertySourceUtils {
 		private final LinkedHashMap<String, Object> map = new LinkedHashMap<>();
 
 		@Override
+		@Nullable
 		public Object put(Object key, Object value) {
 			if (key instanceof String str) {
 				return this.map.put(str, value);

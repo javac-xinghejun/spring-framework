@@ -111,7 +111,8 @@ a mock service with Mockito:
 [source,xml,indent=0,subs="verbatim,quotes"]
 ----
 	<bean id="accountService" class="org.mockito.Mockito" factory-method="mock">
-		<constructor-arg value="org.example.AccountService"/>
+		<constructor-arg type="java.lang.Class" value="org.example.AccountService"/>
+		<constructor-arg type="java.lang.String" value="accountService"/>
 	</bean>
 ----
 
@@ -152,7 +153,7 @@ Kotlin::
 		@Autowired
 		lateinit var accountService: AccountService
 
-		lateinit mockMvc: MockMvc
+		lateinit var mockMvc: MockMvc
 
 		@BeforeEach
 		fun setup(wac: WebApplicationContext) {

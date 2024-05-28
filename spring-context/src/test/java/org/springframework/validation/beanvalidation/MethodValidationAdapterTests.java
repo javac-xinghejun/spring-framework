@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2023 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import java.util.function.Consumer;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,16 +41,16 @@ import org.springframework.validation.method.ParameterValidationResult;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Unit tests for {@link MethodValidationAdapter}.
+ * Tests for {@link MethodValidationAdapter}.
  *
  * @author Rossen Stoyanchev
  * @author Sam Brannen
  */
-public class MethodValidationAdapterTests {
+class MethodValidationAdapterTests {
 
-	private static final Person faustino1234 = new Person("Faustino1234");
+	private static final Person faustino1234 = new Person("Faustino1234", List.of("Working on Spring"));
 
-	private static final Person cayetana6789 = new Person("Cayetana6789");
+	private static final Person cayetana6789 = new Person("Cayetana6789", List.of("  "));
 
 
 	private final MethodValidationAdapter validationAdapter = new MethodValidationAdapter();
@@ -88,7 +89,13 @@ public class MethodValidationAdapterTests {
 				codes [Size.guardian.name,Size.name,Size.java.lang.String,Size]; \
 				arguments [org.springframework.context.support.DefaultMessageSourceResolvable: \
 				codes [guardian.name,name]; arguments []; default message [name],10,1]; \
-				default message [size must be between 1 and 10]"""));
+				default message [size must be between 1 and 10]""", """
+				Field error in object 'guardian' on field 'hobbies[0]': rejected value [  ]; \
+				codes [NotBlank.guardian.hobbies[0],NotBlank.guardian.hobbies,NotBlank.hobbies[0],\
+				NotBlank.hobbies,NotBlank.java.lang.String,NotBlank]; arguments \
+				[org.springframework.context.support.DefaultMessageSourceResolvable: codes \
+				[guardian.hobbies[0],hobbies[0]]; arguments []; default message [hobbies[0]]]; \
+				default message [must not be blank]"""));
 
 			assertValueResult(ex.getValueResults().get(0), 2, 3, List.of("""
 				org.springframework.context.support.DefaultMessageSourceResolvable: \
@@ -106,7 +113,7 @@ public class MethodValidationAdapterTests {
 
 		this.validationAdapter.setObjectNameResolver((param, value) -> "studentToAdd");
 
-		testArgs(target, method, new Object[] {faustino1234, new Person("Joe"), 1}, ex -> {
+		testArgs(target, method, new Object[] {faustino1234, new Person("Joe", List.of()), 1}, ex -> {
 
 			assertThat(ex.getAllValidationResults()).hasSize(1);
 
@@ -154,7 +161,7 @@ public class MethodValidationAdapterTests {
 	}
 
 	@Test
-	void validateListArgument() {
+	void validateBeanListArgument() {
 		MyService target = new MyService();
 		Method method = getMethod(target, "addPeople");
 
@@ -178,7 +185,31 @@ public class MethodValidationAdapterTests {
 				codes [Size.people.name,Size.name,Size.java.lang.String,Size]; \
 				arguments [org.springframework.context.support.DefaultMessageSourceResolvable: \
 				codes [people.name,name]; arguments []; default message [name],10,1]; \
-				default message [size must be between 1 and 10]"""));
+				default message [size must be between 1 and 10]""", """
+				Field error in object 'people' on field 'hobbies[0]': rejected value [  ]; \
+				codes [NotBlank.people.hobbies[0],NotBlank.people.hobbies,NotBlank.hobbies[0],\
+				NotBlank.hobbies,NotBlank.java.lang.String,NotBlank]; arguments \
+				[org.springframework.context.support.DefaultMessageSourceResolvable: codes \
+				[people.hobbies[0],hobbies[0]]; arguments []; default message [hobbies[0]]]; \
+				default message [must not be blank]"""));
+		});
+	}
+
+	@Test
+	void validateValueListArgument() {
+		MyService target = new MyService();
+		Method method = getMethod(target, "addHobbies");
+
+		testArgs(target, method, new Object[] {List.of("   ")}, ex -> {
+
+			assertThat(ex.getAllValidationResults()).hasSize(1);
+
+			assertValueResult(ex.getValueResults().get(0), 0, "   ", List.of("""
+				org.springframework.context.support.DefaultMessageSourceResolvable: \
+				codes [NotBlank.myService#addHobbies.hobbies,NotBlank.hobbies,NotBlank.java.util.List,NotBlank]; \
+				arguments [org.springframework.context.support.DefaultMessageSourceResolvable: \
+				codes [myService#addHobbies.hobbies,hobbies]; \
+				arguments []; default message [hobbies]]; default message [must not be blank]"""));
 		});
 	}
 
@@ -191,7 +222,7 @@ public class MethodValidationAdapterTests {
 	}
 
 	private static void assertBeanResult(
-			ParameterErrors errors, int parameterIndex, String objectName, Object argument,
+			ParameterErrors errors, int parameterIndex, String objectName, @Nullable Object argument,
 			List<String> fieldErrors) {
 
 		assertThat(errors.getMethodParameter().getParameterIndex()).isEqualTo(parameterIndex);
@@ -237,11 +268,14 @@ public class MethodValidationAdapterTests {
 		public void addPeople(@Valid List<Person> people) {
 		}
 
+		public void addHobbies(List<@NotBlank String> hobbies) {
+		}
+
 	}
 
 
 	@SuppressWarnings("unused")
-	private record Person(@Size(min = 1, max = 10) String name) {
+	private record Person(@Size(min = 1, max = 10) String name, List<@NotBlank String> hobbies) {
 	}
 
 }

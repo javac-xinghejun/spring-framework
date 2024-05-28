@@ -1,7 +1,7 @@
 [[spring-mvc-test-vs-end-to-end-integration-tests]]
 = MockMvc vs End-to-End Tests
 
-MockMVc is built on Servlet API mock implementations from the
+MockMvc is built on Servlet API mock implementations from the
 `spring-test` module and does not rely on a running container. Therefore, there are
 some differences when compared to full end-to-end integration tests with an actual
 client and a live server running.
@@ -21,7 +21,7 @@ for rendering JSON, XML, and other formats through `@ResponseBody` methods.
 
 Alternatively, you may consider the full end-to-end integration testing support from
 Spring Boot with `@SpringBootTest`. See the
-{docs-spring-boot}/html/spring-boot-features.html#boot-features-testing[Spring Boot Reference Guide].
+{spring-boot-docs}/spring-boot-features.html#boot-features-testing[Spring Boot Reference Guide].
 
 There are pros and cons for each approach. The options provided in Spring MVC Test are
 different stops on the scale from classic unit testing to full integration testing. To be

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2023 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 /**
- * Unit tests for {@link MockHttpServletRequest}.
+ * Tests for {@link MockHttpServletRequest}.
  *
  * @author Rick Evans
  * @author Mark Fisher
@@ -93,6 +93,17 @@ class MockHttpServletRequestTests {
 		secondRequest.getInputStream().close();
 	}
 
+	@Test // gh-32820
+	void readEmptyReaderWorksAcrossRequests() throws IOException {
+		MockHttpServletRequest firstRequest = new MockHttpServletRequest();
+		firstRequest.getReader().read(new char[256]);
+		firstRequest.getReader().close();
+
+		MockHttpServletRequest secondRequest = new MockHttpServletRequest();
+		secondRequest.getReader().read(new char[256]);
+		secondRequest.getReader().close();
+	}
+
 	@Test
 	void setContentAndGetReader() throws IOException {
 		byte[] bytes = "body".getBytes(Charset.defaultCharset());
@@ -114,7 +125,7 @@ class MockHttpServletRequestTests {
 	}
 
 	@Test
-	void getContentAsStringWithoutSettingCharacterEncoding() throws IOException {
+	void getContentAsStringWithoutSettingCharacterEncoding() {
 		assertThatIllegalStateException().isThrownBy(
 				request::getContentAsString)
 			.withMessageContaining("Cannot get content as a String for a null character encoding");
@@ -145,14 +156,14 @@ class MockHttpServletRequestTests {
 	}
 
 	@Test  // SPR-16505
-	void getInputStreamTwice() throws IOException {
+	void getInputStreamTwice() {
 		byte[] bytes = "body".getBytes(Charset.defaultCharset());
 		request.setContent(bytes);
 		assertThat(request.getInputStream()).isSameAs(request.getInputStream());
 	}
 
 	@Test  // SPR-16499
-	void getReaderAfterGettingInputStream() throws IOException {
+	void getReaderAfterGettingInputStream() {
 		request.getInputStream();
 		assertThatIllegalStateException().isThrownBy(
 				request::getReader)

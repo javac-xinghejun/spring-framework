@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2023 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 package org.springframework.validation.beanvalidation;
 
+import java.util.Locale;
 import java.util.Set;
 
 import jakarta.validation.ConstraintViolation;
@@ -36,9 +37,11 @@ import org.springframework.validation.method.ParameterErrors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
+ * Tests for method validation proxy with reactor.
  *
+ * @author Rossen Stoyanchev
  */
-public class MethodValidationProxyReactorTests {
+class MethodValidationProxyReactorTests {
 
 	@Test
 	void validMonoArgument() {
@@ -93,11 +96,18 @@ public class MethodValidationProxyReactorTests {
 	}
 
 	private static MyService initProxy(Object target, boolean adaptViolations) {
-		Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
-		MethodValidationInterceptor interceptor = new MethodValidationInterceptor(() -> validator, adaptViolations);
-		ProxyFactory factory = new ProxyFactory(target);
-		factory.addAdvice(interceptor);
-		return (MyService) factory.getProxy();
+		Locale oldDefault = Locale.getDefault();
+		Locale.setDefault(Locale.US);
+		try {
+			Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+			MethodValidationInterceptor interceptor = new MethodValidationInterceptor(() -> validator, adaptViolations);
+			ProxyFactory factory = new ProxyFactory(target);
+			factory.addAdvice(interceptor);
+			return (MyService) factory.getProxy();
+		}
+		finally {
+			Locale.setDefault(oldDefault);
+		}
 	}
 
 
